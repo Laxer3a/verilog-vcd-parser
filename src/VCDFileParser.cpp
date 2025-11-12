@@ -4,26 +4,41 @@
 */
 
 #include "VCDFileParser.hpp"
+#include <cerrno>
+#include <cstring>
 
+// Forward declarations for flex reentrant functions
+extern "C" {
+    int yylex_init(yyscan_t* scanner);
+    int yylex_destroy(yyscan_t scanner);
+    void yyset_in(FILE* in_str, yyscan_t yyscanner);
+    void yyset_extra(void* user_defined, yyscan_t yyscanner);
+    void yyset_debug(int debug_flag, yyscan_t yyscanner);
+}
 
 VCDFileParser::VCDFileParser() {
 
-
     this -> start_time = -std::numeric_limits<decltype(start_time)>::max();
     this -> end_time = std::numeric_limits<decltype(end_time)>::max() ;
+    this -> current_time = 0;
 
     this->trace_scanning = false;
     this->trace_parsing = false;
+
+    this->scanner = nullptr;
+    this->input_file = nullptr;
 }
 
 VCDFileParser::~VCDFileParser()
 {
+    // Scanner cleanup is handled in scan_end()
 }
 
 VCDFile *VCDFileParser::parse_file(const std::string &filepath)
 {
 
     this->filepath = filepath;
+    this->current_time = 0;  // Reset current time for each parse
 
     scan_begin();
 
@@ -39,9 +54,9 @@ VCDFile *VCDFileParser::parse_file(const std::string &filepath)
     this -> fh -> root_scope = new VCDScope;
     this -> fh -> root_scope -> name = std::string("");
     this -> fh -> root_scope -> type = VCD_SCOPE_ROOT;
-    
+
     this -> scopes.push(this -> fh -> root_scope);
-    
+
     tr -> add_scope(scopes.top());
 
     VCDParser::parser parser(*this);
@@ -76,6 +91,49 @@ void VCDFileParser::error(const VCDParser::location &l, const std::string &m)
 
 void VCDFileParser::error(const std::string & m){
     std::cerr << " : "<<m<<std::endl;
+}
+
+VCDParser::parser::symbol_type VCDFileParser::get_next_token() {
+    return yylex(scanner);
+}
+
+void VCDFileParser::scan_begin() {
+    // Initialize the reentrant scanner
+    yylex_init(&scanner);
+
+    // Set the scanner extra data to point to this parser instance
+    yyset_extra(this, scanner);
+
+    // Set debug flag
+    yyset_debug(trace_scanning ? 1 : 0, scanner);
+
+    // Open the input file
+    if(filepath.empty() || filepath == "-") {
+        input_file = stdin;
+    } else {
+        input_file = fopen(filepath.c_str(), "r");
+        if(!input_file) {
+            error("Cannot open " + filepath + ": " + strerror(errno));
+            exit(EXIT_FAILURE);
+        }
+    }
+
+    // Set the input file for the scanner
+    yyset_in(input_file, scanner);
+}
+
+void VCDFileParser::scan_end() {
+    // Close the input file if it's not stdin
+    if(input_file && input_file != stdin) {
+        fclose(input_file);
+    }
+    input_file = nullptr;
+
+    // Destroy the scanner
+    if(scanner) {
+        yylex_destroy(scanner);
+        scanner = nullptr;
+    }
 }
 
 #ifdef VCD_PARSER_STANDALONE
