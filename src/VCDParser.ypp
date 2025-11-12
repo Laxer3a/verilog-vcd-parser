@@ -37,8 +37,9 @@
 
 #include "VCDFileParser.hpp"
 
-//! Current time while parsing the VCD file.
-VCDTime current_time = 0;
+// Redefine yylex for the parser to use the driver's scanner
+#undef yylex
+#define yylex driver.get_next_token
 
 }
 
@@ -184,10 +185,10 @@ scope_type :
 ;
 
 simulation_time : TOK_HASH TOK_DECIMAL_NUM {
-    current_time =  $2;
-    if (current_time > driver.end_time)
+    driver.current_time =  $2;
+    if (driver.current_time > driver.end_time)
         YYACCEPT;
-    if (current_time > driver.start_time)
+    if (driver.current_time > driver.start_time)
         driver.fh    -> add_timestamp($2);
 }
 
@@ -202,10 +203,10 @@ value_change:
 scalar_value_change:  TOK_VALUE TOK_IDENTIFIER {
 
     VCDSignalHash   hash  = $2;
-    if (current_time > driver.start_time) {
+    if (driver.current_time > driver.start_time) {
         VCDTimedValue * toadd = new VCDTimedValue();
 
-        toadd -> time   = current_time;
+        toadd -> time   = driver.current_time;
         toadd -> value  = new VCDValue($1);
 
         driver.fh -> add_signal_value(toadd, hash);
@@ -214,13 +215,13 @@ scalar_value_change:  TOK_VALUE TOK_IDENTIFIER {
 }
 
 
-vector_value_change: 
+vector_value_change:
     TOK_BIN_NUM     TOK_IDENTIFIER {
 
     VCDSignalHash   hash  = $2;
     VCDTimedValue * toadd = new VCDTimedValue();
-    
-    toadd -> time   = current_time;
+
+    toadd -> time   = driver.current_time;
 
     VCDBitVector * vec = new VCDBitVector();
     VCDValue * val = new VCDValue(vec);
@@ -256,20 +257,20 @@ vector_value_change:
 
     VCDSignalHash   hash  = $2;
     VCDTimedValue * toadd = new VCDTimedValue();
-    
-    toadd -> time   = current_time;
+
+    toadd -> time   = driver.current_time;
     toadd -> value  = 0;
 
     VCDValue * val;
     VCDReal real_value;
-    
+
     // Legal way of parsing dumped floats according to the spec.
     // Sec 21.7.2.1, paragraph 4.
     const char * buffer = $1.c_str() + 1;
     float tmp;
     std::sscanf(buffer, "%g", &tmp);
     real_value = tmp;
-    
+
     toadd -> value = new VCDValue(real_value);
     driver.fh -> add_signal_value(toadd, hash);
 }

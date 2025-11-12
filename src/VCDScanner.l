@@ -4,7 +4,7 @@
 */
 
 %{
-    
+
 #include <cerrno>
 #include <climits>
 #include <cstdlib>
@@ -16,20 +16,24 @@
 #include "VCDParser.hpp"
 
 #undef yywrap
-#define yywrap() 1
+#define yywrap(yyscanner) 1
 
-#define yyterminate() return VCDParser::parser::make_END(loc)
+#define yyterminate() return VCDParser::parser::make_END(driver.loc)
 
-static VCDParser::location loc;
-    
 %}
 
-%option noyywrap nounput batch debug noinput
+%option noyywrap nounput batch debug noinput reentrant
+%option bison-bridge bison-locations
+%option extra-type="VCDFileParser*"
+
+%{
+#define driver (*yyextra)
+%}
 
 BRACKET_O           \[
 BRACKET_C           \]
 COLON               :
-KW_END              $end 
+KW_END              $end
 KW_COMMENT          $comment
 KW_DATE             $date
 KW_ENDDEFINITIONS   $enddefinitions
@@ -68,7 +72,7 @@ VAR_TYPE_WAND       wand
 VAR_TYPE_WIRE       wire
 VAR_TYPE_WOR        wor
 HASH                #
-SCALAR_NUM          0|1|x|X|z|Z       
+SCALAR_NUM          0|1|x|X|z|Z
 
 BIN_NUM             (b|B)(0|1|x|X|z|Z)+
 REAL_NUM            (r|r)[0-9]+(\.[0-9]+)?
@@ -95,67 +99,67 @@ VERSION_TEXT        {COMMENT_TEXT}
 %x IN_VAL_IDCODE
 
 %{
-#define YY_USER_ACTION loc.columns(yyleng);
+#define YY_USER_ACTION driver.loc.columns(yyleng);
 %}
 
 %%
 
 %{
-    loc.step();
+    driver.loc.step();
 %}
 
 
 {KW_END} {
-    return VCDParser::parser::make_TOK_KW_END(loc);
+    return VCDParser::parser::make_TOK_KW_END(driver.loc);
 }
 
 <IN_VAL_IDCODE,IN_VAR,IN_VAR_PID,IN_VAR_RNG,IN_VERSION,IN_DATE,IN_COMMENT,IN_TIMESCALE,IN_SCOPE>{KW_END} {
     BEGIN(INITIAL);
-    return VCDParser::parser::make_TOK_KW_END(loc);
+    return VCDParser::parser::make_TOK_KW_END(driver.loc);
 }
 
 {KW_COMMENT} {
     BEGIN(IN_COMMENT);
     //std::cout << yytext << ", ";
-    return VCDParser::parser::make_TOK_KW_COMMENT(loc);
+    return VCDParser::parser::make_TOK_KW_COMMENT(driver.loc);
 }
 
 <IN_COMMENT>{COMMENT_TEXT} {
     //std::cout << yytext << ", ";
-    return VCDParser::parser::make_TOK_COMMENT_TEXT(std::string(yytext),loc);
+    return VCDParser::parser::make_TOK_COMMENT_TEXT(std::string(yytext),driver.loc);
 }
 
 {KW_DATE} {
     BEGIN(IN_DATE);
     //std::cout << yytext << ", ";
-    return VCDParser::parser::make_TOK_KW_DATE(loc);
+    return VCDParser::parser::make_TOK_KW_DATE(driver.loc);
 }
 
 <IN_DATE>{DATE_TEXT} {
     //std::cout << yytext << ", ";
-    return VCDParser::parser::make_TOK_DATE_TEXT(std::string(yytext),loc);
+    return VCDParser::parser::make_TOK_DATE_TEXT(std::string(yytext),driver.loc);
 }
 
 {KW_VERSION} {
     BEGIN(IN_VERSION);
     //std::cout << yytext << ", ";
-    return VCDParser::parser::make_TOK_KW_VERSION(loc);
+    return VCDParser::parser::make_TOK_KW_VERSION(driver.loc);
 }
 
 <IN_VERSION>{VERSION_TEXT} {
     //std::cout << yytext << ", ";
-    return VCDParser::parser::make_TOK_VERSION_TEXT(std::string(yytext),loc);
+    return VCDParser::parser::make_TOK_VERSION_TEXT(std::string(yytext),driver.loc);
 }
 
 {KW_TIMESCALE} {
     BEGIN(IN_TIMESCALE);
     //std::cout << yytext << ", ";
-    return VCDParser::parser::make_TOK_KW_TIMESCALE(loc);
+    return VCDParser::parser::make_TOK_KW_TIMESCALE(driver.loc);
 }
 
 <IN_TIMESCALE>{TIME_NUMBER} {
     //std::cout << yytext << ", ";
-    return VCDParser::parser::make_TOK_TIME_NUMBER(std::atoi(yytext),loc);
+    return VCDParser::parser::make_TOK_TIME_NUMBER(std::atoi(yytext),driver.loc);
 }
 
 <IN_TIMESCALE>{TIME_UNIT} {
@@ -174,24 +178,24 @@ VERSION_TEXT        {COMMENT_TEXT}
         tr = TIME_PS;
     }
 
-    return VCDParser::parser::make_TOK_TIME_UNIT(tr,loc);
+    return VCDParser::parser::make_TOK_TIME_UNIT(tr,driver.loc);
 }
 
 
 {KW_SCOPE} {
     BEGIN(IN_SCOPE);
     //std::cout << yytext << ", ";
-    return VCDParser::parser::make_TOK_KW_SCOPE(loc);
+    return VCDParser::parser::make_TOK_KW_SCOPE(driver.loc);
 }
 
 <IN_SCOPE>{KW_BEGIN} {
     //std::cout << yytext << ", ";
-    return VCDParser::parser::make_TOK_KW_BEGIN(VCD_SCOPE_BEGIN,loc);
+    return VCDParser::parser::make_TOK_KW_BEGIN(VCD_SCOPE_BEGIN,driver.loc);
 }
 
 <IN_SCOPE>{KW_FORK} {
     //std::cout << yytext << ", ";
-    return VCDParser::parser::make_TOK_KW_FORK(VCD_SCOPE_FORK,loc);
+    return VCDParser::parser::make_TOK_KW_FORK(VCD_SCOPE_FORK,driver.loc);
 }
 
 <IN_SCOPE>{KW_FUNCTION} {
@@ -211,116 +215,116 @@ VERSION_TEXT        {COMMENT_TEXT}
 
 <IN_SCOPE>{SCOPE_IDENTIFIER} {
     //std::cout << yytext << ", ";
-    return VCDParser::parser::make_TOK_IDENTIFIER(std::string(yytext),loc);
+    return VCDParser::parser::make_TOK_IDENTIFIER(std::string(yytext),driver.loc);
 }
 
 {KW_UPSCOPE} {
     //std::cout << yytext << ", ";
-    return VCDParser::parser::make_TOK_KW_UPSCOPE(loc);
+    return VCDParser::parser::make_TOK_KW_UPSCOPE(driver.loc);
 }
 
 {KW_ENDDEFINITIONS} {
     //std::cout << yytext << ", ";
-    return VCDParser::parser::make_TOK_KW_ENDDEFINITIONS(loc);
+    return VCDParser::parser::make_TOK_KW_ENDDEFINITIONS(driver.loc);
 }
 
 {KW_VAR} {
     BEGIN(IN_VAR);
     //std::cout << yytext << ", ";
-    return VCDParser::parser::make_TOK_KW_VAR(loc);
+    return VCDParser::parser::make_TOK_KW_VAR(driver.loc);
 }
 
-<IN_VAR>{VAR_TYPE_EVENT} {return VCDParser::parser::make_TOK_VAR_TYPE(VCD_VAR_EVENT    ,loc);}
-<IN_VAR>{VAR_TYPE_INTEGER} {return VCDParser::parser::make_TOK_VAR_TYPE(VCD_VAR_INTEGER  ,loc);}
-<IN_VAR>{VAR_TYPE_PARAMETER} {return VCDParser::parser::make_TOK_VAR_TYPE(VCD_VAR_PARAMETER,loc);}
-<IN_VAR>{VAR_TYPE_REAL} {return VCDParser::parser::make_TOK_VAR_TYPE(VCD_VAR_REAL     ,loc);}
-<IN_VAR>{VAR_TYPE_REALTIME} {return VCDParser::parser::make_TOK_VAR_TYPE(VCD_VAR_REALTIME ,loc);}
-<IN_VAR>{VAR_TYPE_REG} {return VCDParser::parser::make_TOK_VAR_TYPE(VCD_VAR_REG      ,loc);}
-<IN_VAR>{VAR_TYPE_SUPPLY0} {return VCDParser::parser::make_TOK_VAR_TYPE(VCD_VAR_SUPPLY0  ,loc);}
-<IN_VAR>{VAR_TYPE_SUPPLY1} {return VCDParser::parser::make_TOK_VAR_TYPE(VCD_VAR_SUPPLY1  ,loc);}
-<IN_VAR>{VAR_TYPE_TIME} {return VCDParser::parser::make_TOK_VAR_TYPE(VCD_VAR_TIME     ,loc);}
-<IN_VAR>{VAR_TYPE_TRI} {return VCDParser::parser::make_TOK_VAR_TYPE(VCD_VAR_TRI      ,loc);}
-<IN_VAR>{VAR_TYPE_TRIAND} {return VCDParser::parser::make_TOK_VAR_TYPE(VCD_VAR_TRIAND   ,loc);}
-<IN_VAR>{VAR_TYPE_TRIOR} {return VCDParser::parser::make_TOK_VAR_TYPE(VCD_VAR_TRIOR    ,loc);}
-<IN_VAR>{VAR_TYPE_TRIREG} {return VCDParser::parser::make_TOK_VAR_TYPE(VCD_VAR_TRIREG   ,loc);}
-<IN_VAR>{VAR_TYPE_TRI0} {return VCDParser::parser::make_TOK_VAR_TYPE(VCD_VAR_TRI0     ,loc);}
-<IN_VAR>{VAR_TYPE_TRI1} {return VCDParser::parser::make_TOK_VAR_TYPE(VCD_VAR_TRI1     ,loc);}
-<IN_VAR>{VAR_TYPE_WAND} {return VCDParser::parser::make_TOK_VAR_TYPE(VCD_VAR_WAND     ,loc);}
-<IN_VAR>{VAR_TYPE_WIRE} {return VCDParser::parser::make_TOK_VAR_TYPE(VCD_VAR_WIRE     ,loc);}
-<IN_VAR>{VAR_TYPE_WOR} {return VCDParser::parser::make_TOK_VAR_TYPE(VCD_VAR_WOR      ,loc);}
+<IN_VAR>{VAR_TYPE_EVENT} {return VCDParser::parser::make_TOK_VAR_TYPE(VCD_VAR_EVENT    ,driver.loc);}
+<IN_VAR>{VAR_TYPE_INTEGER} {return VCDParser::parser::make_TOK_VAR_TYPE(VCD_VAR_INTEGER  ,driver.loc);}
+<IN_VAR>{VAR_TYPE_PARAMETER} {return VCDParser::parser::make_TOK_VAR_TYPE(VCD_VAR_PARAMETER,driver.loc);}
+<IN_VAR>{VAR_TYPE_REAL} {return VCDParser::parser::make_TOK_VAR_TYPE(VCD_VAR_REAL     ,driver.loc);}
+<IN_VAR>{VAR_TYPE_REALTIME} {return VCDParser::parser::make_TOK_VAR_TYPE(VCD_VAR_REALTIME ,driver.loc);}
+<IN_VAR>{VAR_TYPE_REG} {return VCDParser::parser::make_TOK_VAR_TYPE(VCD_VAR_REG      ,driver.loc);}
+<IN_VAR>{VAR_TYPE_SUPPLY0} {return VCDParser::parser::make_TOK_VAR_TYPE(VCD_VAR_SUPPLY0  ,driver.loc);}
+<IN_VAR>{VAR_TYPE_SUPPLY1} {return VCDParser::parser::make_TOK_VAR_TYPE(VCD_VAR_SUPPLY1  ,driver.loc);}
+<IN_VAR>{VAR_TYPE_TIME} {return VCDParser::parser::make_TOK_VAR_TYPE(VCD_VAR_TIME     ,driver.loc);}
+<IN_VAR>{VAR_TYPE_TRI} {return VCDParser::parser::make_TOK_VAR_TYPE(VCD_VAR_TRI      ,driver.loc);}
+<IN_VAR>{VAR_TYPE_TRIAND} {return VCDParser::parser::make_TOK_VAR_TYPE(VCD_VAR_TRIAND   ,driver.loc);}
+<IN_VAR>{VAR_TYPE_TRIOR} {return VCDParser::parser::make_TOK_VAR_TYPE(VCD_VAR_TRIOR    ,driver.loc);}
+<IN_VAR>{VAR_TYPE_TRIREG} {return VCDParser::parser::make_TOK_VAR_TYPE(VCD_VAR_TRIREG   ,driver.loc);}
+<IN_VAR>{VAR_TYPE_TRI0} {return VCDParser::parser::make_TOK_VAR_TYPE(VCD_VAR_TRI0     ,driver.loc);}
+<IN_VAR>{VAR_TYPE_TRI1} {return VCDParser::parser::make_TOK_VAR_TYPE(VCD_VAR_TRI1     ,driver.loc);}
+<IN_VAR>{VAR_TYPE_WAND} {return VCDParser::parser::make_TOK_VAR_TYPE(VCD_VAR_WAND     ,driver.loc);}
+<IN_VAR>{VAR_TYPE_WIRE} {return VCDParser::parser::make_TOK_VAR_TYPE(VCD_VAR_WIRE     ,driver.loc);}
+<IN_VAR>{VAR_TYPE_WOR} {return VCDParser::parser::make_TOK_VAR_TYPE(VCD_VAR_WOR      ,driver.loc);}
 
 <IN_VAR>{DECIMAL_NUM} {
     BEGIN(IN_VAR_PSIZE);
     //std::cout << yytext << ", ";
-    return VCDParser::parser::make_TOK_DECIMAL_NUM(std::atoi(yytext),loc);
+    return VCDParser::parser::make_TOK_DECIMAL_NUM(std::atoi(yytext),driver.loc);
 }
 
 <IN_VAR_PSIZE>{IDENTIFIER_CODE} {
     BEGIN(IN_VAR_PID);
     //std::cout << yytext << ", ";
-    return VCDParser::parser::make_TOK_IDENTIFIER(std::string(yytext),loc);
+    return VCDParser::parser::make_TOK_IDENTIFIER(std::string(yytext),driver.loc);
 }
 
 <IN_VAR_PID>{SCOPE_IDENTIFIER} {
     //std::cout << yytext << ", ";
-    return VCDParser::parser::make_TOK_IDENTIFIER(std::string(yytext),loc);
+    return VCDParser::parser::make_TOK_IDENTIFIER(std::string(yytext),driver.loc);
 }
 
 <IN_VAR_PID>{BRACKET_O} {
     BEGIN(IN_VAR_RNG);
     //std::cout << yytext << ", ";
-    return VCDParser::parser::make_TOK_BRACKET_O(loc);
+    return VCDParser::parser::make_TOK_BRACKET_O(driver.loc);
 }
 
 <IN_VAR_RNG>{DECIMAL_NUM} {
     //std::cout << yytext << ", ";
-    return VCDParser::parser::make_TOK_DECIMAL_NUM(std::atoi(yytext),loc);
+    return VCDParser::parser::make_TOK_DECIMAL_NUM(std::atoi(yytext),driver.loc);
 }
 
 <IN_VAR_RNG>{COLON} {
     //std::cout << yytext << ", ";
-    return VCDParser::parser::make_TOK_COLON(loc);
+    return VCDParser::parser::make_TOK_COLON(driver.loc);
 }
 
 <IN_VAR_RNG>{BRACKET_C} {
     //std::cout << yytext << ", ";
-    return VCDParser::parser::make_TOK_BRACKET_C(loc);
+    return VCDParser::parser::make_TOK_BRACKET_C(driver.loc);
 }
 
 {HASH} {
     BEGIN(IN_SIMTIME);
     //std::cout << "simtime: " << yytext << ", ";
-    return VCDParser::parser::make_TOK_HASH(loc);
+    return VCDParser::parser::make_TOK_HASH(driver.loc);
 }
 
 <IN_SIMTIME>{DECIMAL_NUM} {
     BEGIN(INITIAL);
     //std::cout << yytext << std::endl;
-    return VCDParser::parser::make_TOK_DECIMAL_NUM(std::atoi(yytext),loc);
+    return VCDParser::parser::make_TOK_DECIMAL_NUM(std::atoi(yytext),driver.loc);
 }
 
 {KW_DUMPALL} {
     BEGIN(IN_VAL_CHANGES);
     //std::cout << yytext << ", ";
-    return VCDParser::parser::make_TOK_KW_DUMPALL(loc);
+    return VCDParser::parser::make_TOK_KW_DUMPALL(driver.loc);
 }
 
 {KW_DUMPOFF} {
     BEGIN(IN_VAL_CHANGES);
     //std::cout << yytext << ", ";
-    return VCDParser::parser::make_TOK_KW_DUMPOFF(loc);
+    return VCDParser::parser::make_TOK_KW_DUMPOFF(driver.loc);
 }
 
 {KW_DUMPON} {
     BEGIN(IN_VAL_CHANGES);
     //std::cout << yytext << ", ";
-    return VCDParser::parser::make_TOK_KW_DUMPON(loc);
+    return VCDParser::parser::make_TOK_KW_DUMPON(driver.loc);
 }
 
 {KW_DUMPVARS} {
     BEGIN(IN_VAL_CHANGES);
     //std::cout << yytext << ", ";
-    return VCDParser::parser::make_TOK_KW_DUMPVARS(loc);
+    return VCDParser::parser::make_TOK_KW_DUMPVARS(driver.loc);
 }
 
 <IN_VAL_CHANGES,INITIAL>{SCALAR_NUM} {
@@ -367,16 +371,16 @@ VERSION_TEXT        {COMMENT_TEXT}
 <IN_VAL_IDCODE>{IDENTIFIER_CODE} {
     //std::cout << yytext << std::endl;
     BEGIN(INITIAL);
-    return VCDParser::parser::make_TOK_IDENTIFIER(std::string(yytext),loc);
+    return VCDParser::parser::make_TOK_IDENTIFIER(std::string(yytext),driver.loc);
 }
 
-\t {loc.columns();}
-\n {loc.lines();}
-\r {loc.lines();}
+\t {driver.loc.columns();}
+\n {driver.loc.lines();}
+\r {driver.loc.lines();}
 
 
 <<EOF>> {
-    return VCDParser::parser::make_END(loc);
+    return VCDParser::parser::make_END(driver.loc);
 }
 
 <*>.|\n {
@@ -385,18 +389,4 @@ VERSION_TEXT        {COMMENT_TEXT}
 
 %%
 
-void VCDFileParser::scan_begin() {
-    yy_flex_debug = trace_scanning;
-    if(filepath.empty() || filepath == "-") {
-        yyin = stdin;
-    }
-    else if(!(yyin = fopen(filepath.c_str(), "r"))) {
-        error("Cannot open "+filepath+": "+strerror(errno));
-        exit(EXIT_FAILURE);
-    }
-}
-
-void VCDFileParser::scan_end() {
-    fclose(yyin);
-    yypop_buffer_state();
-}
+// No longer needed - moved to VCDFileParser class methods

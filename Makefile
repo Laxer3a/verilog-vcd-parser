@@ -49,7 +49,11 @@ $(LEX_OUT) : $(LEX_SRC) $(YAC_OUT)
 $(TEST_APP) : $(TEST_FILE) $(SRC_DIR)/VCDStandalone.cpp $(VCD_OBJ_FILES)
 	$(CXX) $(CXXFLAGS) -o $@ $^
 
+test-multithread: $(BUILD_DIR)/libverilog-vcd-parser.a
+	$(MAKE) -C test test
+
 clean:
 	rm -rf $(LEX_OUT) $(LEX_HEADER) $(LEX_OBJ) \
            $(YAC_OUT) $(YAC_HEADER) $(YAC_OBJ) \
            position.hh stack.hh location.hh VCDParser.output $(TEST_APP)
+	$(MAKE) -C test clean 2>/dev/null || true
